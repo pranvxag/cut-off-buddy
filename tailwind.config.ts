@@ -52,6 +52,14 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				academic: {
+					blue: 'hsl(var(--academic-blue))',
+					'blue-light': 'hsl(var(--academic-blue-light))',
+					green: 'hsl(var(--academic-green))',
+					'green-light': 'hsl(var(--academic-green-light))'
+				},
+				'data-hover': 'hsl(var(--data-hover))',
+				'table-border': 'hsl(var(--table-border))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
