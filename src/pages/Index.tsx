@@ -1,11 +1,11 @@
-import { CollegeCutoffApp } from '@/components/CollegeCutoffApp';
-import { AuthWrapper } from '@/components/AuthWrapper';
+import { SupabaseAuthWrapper } from '@/components/SupabaseAuthWrapper';
+import { SupabaseCollegeCutoffApp } from '@/components/SupabaseCollegeCutoffApp';
 
 const Index = () => {
   return (
-    <AuthWrapper>
-      {(user) => <CollegeCutoffApp user={user} />}
-    </AuthWrapper>
+    <SupabaseAuthWrapper>
+      {(user) => <SupabaseCollegeCutoffApp user={user} />}
+    </SupabaseAuthWrapper>
   );
 };
 

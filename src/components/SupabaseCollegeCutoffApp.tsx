@@ -7,15 +7,14 @@ import { FileUpload } from './FileUpload';
 import { CollegeTable } from './CollegeTable';
 import { AddCollegeModal } from './AddCollegeModal';
 import { CollegeData, UserSession } from '@/types/college';
-import { collection, doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { User } from 'firebase/auth';
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CollegeCutoffAppProps {
   user: User;
 }
 
-export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
+export const SupabaseCollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
   const [colleges, setColleges] = useState<CollegeData[]>([]);
   const [deletedColleges, setDeletedColleges] = useState<CollegeData[]>([]);
   const [lastAction, setLastAction] = useState<'delete' | 'reorder' | 'restore' | null>(null);
@@ -23,30 +22,60 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Save to Firebase
-  const saveToFirebase = useCallback(async () => {
+  // Save to Supabase
+  const saveToSupabase = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
     try {
-      const sessionData: UserSession = {
-        id: user.uid,
-        colleges,
-        deletedColleges,
-        lastAction,
-        lastActionData,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+      // Save colleges
+      const { error: deleteError } = await supabase
+        .from('colleges')
+        .delete()
+        .eq('user_id', user.id);
 
-      await setDoc(doc(collection(db, 'userSessions'), user.uid), sessionData);
+      if (deleteError) throw deleteError;
+
+      // Insert current colleges (both active and deleted)
+      const allColleges = [...colleges, ...deletedColleges];
+      if (allColleges.length > 0) {
+        const collegesData = allColleges.map(college => ({
+          user_id: user.id,
+          sr_no: college.srNo,
+          college_name: college.collegeName,
+          branch: college.branch,
+          cutoff: college.cutoff,
+          number_outside_bracket: college.numberOutsideBracket,
+          number_inside_bracket: college.numberInsideBracket,
+          order_position: college.order,
+          original_order: college.originalOrder,
+          is_deleted: deletedColleges.some(dc => dc.id === college.id)
+        }));
+
+        const { error: insertError } = await supabase
+          .from('colleges')
+          .insert(collegesData);
+
+        if (insertError) throw insertError;
+      }
+
+      // Save session state
+      const { error: sessionError } = await supabase
+        .from('user_sessions')
+        .upsert({
+          user_id: user.id,
+          last_action: lastAction,
+          last_action_data: lastActionData
+        });
+
+      if (sessionError) throw sessionError;
       
       toast({
         title: "Data saved",
         description: "Your college preferences have been saved successfully",
       });
     } catch (error) {
-      console.error('Error saving to Firebase:', error);
+      console.error('Error saving to Supabase:', error);
       toast({
         title: "Save failed",
         description: "Unable to save data. Please check your connection.",
@@ -57,29 +86,71 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
     }
   }, [user, colleges, deletedColleges, lastAction, lastActionData, toast]);
 
-  // Load from Firebase
-  const loadFromFirebase = useCallback(async () => {
+  // Load from Supabase
+  const loadFromSupabase = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
     try {
-      const docRef = doc(db, 'userSessions', user.uid);
-      const docSnap = await getDoc(docRef);
+      // Load colleges
+      const { data: collegesData, error: collegesError } = await supabase
+        .from('colleges')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('order_position');
+
+      if (collegesError) throw collegesError;
+
+      if (collegesData && collegesData.length > 0) {
+        const loadedColleges: CollegeData[] = [];
+        const loadedDeletedColleges: CollegeData[] = [];
+
+        collegesData.forEach(college => {
+          const collegeData: CollegeData = {
+            id: college.id,
+            srNo: college.sr_no,
+            collegeName: college.college_name,
+            branch: college.branch,
+            cutoff: college.cutoff,
+            numberOutsideBracket: college.number_outside_bracket,
+            numberInsideBracket: college.number_inside_bracket,
+            order: college.order_position,
+            originalOrder: college.original_order
+          };
+
+          if (college.is_deleted) {
+            loadedDeletedColleges.push(collegeData);
+          } else {
+            loadedColleges.push(collegeData);
+          }
+        });
+
+        setColleges(loadedColleges);
+        setDeletedColleges(loadedDeletedColleges);
+      }
+
+      // Load session state
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('user_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (sessionError && sessionError.code !== 'PGRST116') {
+        console.error('Session load error:', sessionError);
+      } else if (sessionData) {
+        setLastAction(sessionData.last_action as 'delete' | 'reorder' | 'restore' | null);
+        setLastActionData(sessionData.last_action_data);
+      }
       
-      if (docSnap.exists()) {
-        const data = docSnap.data() as UserSession;
-        setColleges(data.colleges || []);
-        setDeletedColleges(data.deletedColleges || []);
-        setLastAction(data.lastAction || null);
-        setLastActionData(data.lastActionData || null);
-        
+      if (collegesData && collegesData.length > 0) {
         toast({
           title: "Data loaded",
           description: "Your saved preferences have been restored",
         });
       }
     } catch (error) {
-      console.error('Error loading from Firebase:', error);
+      console.error('Error loading from Supabase:', error);
       toast({
         title: "Load failed",
         description: "Unable to load saved data",
@@ -94,19 +165,19 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
   useEffect(() => {
     if (colleges.length > 0) {
       const timeoutId = setTimeout(() => {
-        saveToFirebase();
+        saveToSupabase();
       }, 2000); // Auto-save after 2 seconds of inactivity
 
       return () => clearTimeout(timeoutId);
     }
-  }, [colleges, deletedColleges, saveToFirebase]);
+  }, [colleges, deletedColleges, saveToSupabase]);
 
   // Load user data on mount
   useEffect(() => {
     if (user) {
-      loadFromFirebase();
+      loadFromSupabase();
     }
-  }, [user, loadFromFirebase]);
+  }, [user, loadFromSupabase]);
 
   const handleDataExtracted = useCallback((data: CollegeData[]) => {
     setColleges(data);
@@ -260,7 +331,7 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={loadFromFirebase}
+                  onClick={loadFromSupabase}
                   disabled={isLoading}
                   className="gap-2"
                 >
@@ -270,7 +341,7 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={saveToFirebase}
+                  onClick={saveToSupabase}
                   disabled={isLoading}
                   className="gap-2"
                 >
@@ -322,7 +393,7 @@ export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
 
         {/* Footer */}
         <div className="mt-12 text-center text-sm text-muted-foreground">
-          <p>Data is automatically saved to Firebase. User: {user.email}</p>
+          <p>Data is automatically saved to Supabase. User: {user.email}</p>
         </div>
       </div>
     </div>
