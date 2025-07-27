@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      colleges: {
+        Row: {
+          branch: string
+          college_name: string
+          created_at: string
+          cutoff: number
+          id: string
+          is_deleted: boolean
+          number_inside_bracket: number
+          number_outside_bracket: number
+          order_position: number
+          original_order: number | null
+          sr_no: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          branch: string
+          college_name: string
+          created_at?: string
+          cutoff: number
+          id?: string
+          is_deleted?: boolean
+          number_inside_bracket: number
+          number_outside_bracket: number
+          order_position: number
+          original_order?: number | null
+          sr_no: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          branch?: string
+          college_name?: string
+          created_at?: string
+          cutoff?: number
+          id?: string
+          is_deleted?: boolean
+          number_inside_bracket?: number
+          number_outside_bracket?: number
+          order_position?: number
+          original_order?: number | null
+          sr_no?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          last_action: string | null
+          last_action_data: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_action?: string | null
+          last_action_data?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_action?: string | null
+          last_action_data?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
