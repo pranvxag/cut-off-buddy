@@ -5,25 +5,32 @@ import { Card } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from './FileUpload';
 import { CollegeTable } from './CollegeTable';
+import { AddCollegeModal } from './AddCollegeModal';
 import { CollegeData, UserSession } from '@/types/college';
 import { collection, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { User } from 'firebase/auth';
 
-export const CollegeCutoffApp = () => {
+interface CollegeCutoffAppProps {
+  user: User;
+}
+
+export const CollegeCutoffApp = ({ user }: CollegeCutoffAppProps) => {
   const [colleges, setColleges] = useState<CollegeData[]>([]);
   const [deletedColleges, setDeletedColleges] = useState<CollegeData[]>([]);
   const [lastAction, setLastAction] = useState<'delete' | 'reorder' | 'restore' | null>(null);
   const [lastActionData, setLastActionData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => `session-${Date.now()}`);
   const { toast } = useToast();
 
   // Save to Firebase
   const saveToFirebase = useCallback(async () => {
+    if (!user) return;
+    
     setIsLoading(true);
     try {
       const sessionData: UserSession = {
-        id: sessionId,
+        id: user.uid,
         colleges,
         deletedColleges,
         lastAction,
@@ -32,7 +39,7 @@ export const CollegeCutoffApp = () => {
         updatedAt: new Date()
       };
 
-      await setDoc(doc(collection(db, 'userSessions'), sessionId), sessionData);
+      await setDoc(doc(collection(db, 'userSessions'), user.uid), sessionData);
       
       toast({
         title: "Data saved",
@@ -48,13 +55,15 @@ export const CollegeCutoffApp = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, colleges, deletedColleges, lastAction, lastActionData, toast]);
+  }, [user, colleges, deletedColleges, lastAction, lastActionData, toast]);
 
   // Load from Firebase
   const loadFromFirebase = useCallback(async () => {
+    if (!user) return;
+    
     setIsLoading(true);
     try {
-      const docRef = doc(db, 'userSessions', sessionId);
+      const docRef = doc(db, 'userSessions', user.uid);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
@@ -79,7 +88,7 @@ export const CollegeCutoffApp = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, toast]);
+  }, [user, toast]);
 
   // Auto-save when data changes
   useEffect(() => {
@@ -91,6 +100,13 @@ export const CollegeCutoffApp = () => {
       return () => clearTimeout(timeoutId);
     }
   }, [colleges, deletedColleges, saveToFirebase]);
+
+  // Load user data on mount
+  useEffect(() => {
+    if (user) {
+      loadFromFirebase();
+    }
+  }, [user, loadFromFirebase]);
 
   const handleDataExtracted = useCallback((data: CollegeData[]) => {
     setColleges(data);
@@ -198,6 +214,21 @@ export const CollegeCutoffApp = () => {
     setLastActionData(null);
   }, [lastAction, lastActionData, colleges, toast]);
 
+  const handleAddCollege = useCallback((newCollegeData: Omit<CollegeData, 'id' | 'order'>) => {
+    const newCollege: CollegeData = {
+      ...newCollegeData,
+      id: `college-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      order: colleges.length
+    };
+
+    setColleges(prev => [...prev, newCollege]);
+    
+    toast({
+      title: "College added",
+      description: `${newCollege.collegeName} has been added to the list`,
+    });
+  }, [colleges.length, toast]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-accent/20">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -221,7 +252,7 @@ export const CollegeCutoffApp = () => {
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Database className="w-4 h-4" />
-                  Session: {sessionId.slice(-8)}
+                  User: {user.email}
                 </div>
               </div>
               
@@ -261,17 +292,20 @@ export const CollegeCutoffApp = () => {
                 <h2 className="text-2xl font-semibold text-foreground">College Cutoff Data</h2>
                 <p className="text-muted-foreground">Drag and drop to reorder according to your preference</p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setColleges([]);
-                  setDeletedColleges([]);
-                  setLastAction(null);
-                  setLastActionData(null);
-                }}
-              >
-                Upload New File
-              </Button>
+              <div className="flex items-center gap-2">
+                <AddCollegeModal onAddCollege={handleAddCollege} />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setColleges([]);
+                    setDeletedColleges([]);
+                    setLastAction(null);
+                    setLastActionData(null);
+                  }}
+                >
+                  Upload New File
+                </Button>
+              </div>
             </div>
 
         <CollegeTable
@@ -288,7 +322,7 @@ export const CollegeCutoffApp = () => {
 
         {/* Footer */}
         <div className="mt-12 text-center text-sm text-muted-foreground">
-          <p>Data is automatically saved to Firebase. Session ID: {sessionId}</p>
+          <p>Data is automatically saved to Firebase. User: {user.email}</p>
         </div>
       </div>
     </div>
