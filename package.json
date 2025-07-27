@@ -9,6 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview"
+    "homepage": "https://pranvxag.github.io/cut-off-buddy",
+
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
