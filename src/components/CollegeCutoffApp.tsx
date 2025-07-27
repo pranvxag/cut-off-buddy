@@ -12,7 +12,7 @@ import { db } from '@/lib/firebase';
 export const CollegeCutoffApp = () => {
   const [colleges, setColleges] = useState<CollegeData[]>([]);
   const [deletedColleges, setDeletedColleges] = useState<CollegeData[]>([]);
-  const [lastAction, setLastAction] = useState<'delete' | 'reorder' | null>(null);
+  const [lastAction, setLastAction] = useState<'delete' | 'reorder' | 'restore' | null>(null);
   const [lastActionData, setLastActionData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId] = useState(() => `session-${Date.now()}`);
@@ -109,16 +109,57 @@ export const CollegeCutoffApp = () => {
     const collegeToDelete = colleges.find(c => c.id === collegeId);
     if (!collegeToDelete) return;
 
-    setLastActionData({ deletedCollege: collegeToDelete, previousIndex: colleges.findIndex(c => c.id === collegeId) });
+    // Store original position for restoration
+    const collegeWithOriginalOrder = { ...collegeToDelete, originalOrder: collegeToDelete.order };
+    
+    setLastActionData({ deletedCollege: collegeWithOriginalOrder, previousIndex: colleges.findIndex(c => c.id === collegeId) });
     setLastAction('delete');
     setColleges(prev => prev.filter(c => c.id !== collegeId));
-    setDeletedColleges(prev => [...prev, collegeToDelete]);
+    setDeletedColleges(prev => [...prev, collegeWithOriginalOrder]);
     
     toast({
       title: "College deleted",
       description: `${collegeToDelete.collegeName} has been moved to deleted section`,
     });
   }, [colleges, toast]);
+
+  const handleRestore = useCallback((collegeId: string) => {
+    const collegeToRestore = deletedColleges.find(c => c.id === collegeId);
+    if (!collegeToRestore) return;
+
+    // Insert back at original position or at the end if original position is not available
+    const insertPosition = collegeToRestore.originalOrder !== undefined ? collegeToRestore.originalOrder : colleges.length;
+    const updatedColleges = [...colleges];
+    
+    // Remove originalOrder property before inserting back
+    const { originalOrder, ...restoredCollege } = collegeToRestore;
+    
+    // Adjust orders for insertion
+    updatedColleges.forEach(college => {
+      if (college.order >= insertPosition) {
+        college.order += 1;
+      }
+    });
+    
+    restoredCollege.order = insertPosition;
+    updatedColleges.splice(insertPosition, 0, restoredCollege);
+    
+    // Reorder to maintain consistency
+    updatedColleges.sort((a, b) => a.order - b.order);
+    updatedColleges.forEach((college, index) => {
+      college.order = index;
+    });
+
+    setLastActionData({ restoredCollege: collegeToRestore, previousColleges: colleges, previousDeleted: deletedColleges });
+    setLastAction('restore');
+    setColleges(updatedColleges);
+    setDeletedColleges(prev => prev.filter(c => c.id !== collegeId));
+    
+    toast({
+      title: "College restored",
+      description: `${collegeToRestore.collegeName} has been restored to its original position`,
+    });
+  }, [colleges, deletedColleges, toast]);
 
   const handleUndo = useCallback(() => {
     if (!lastAction || !lastActionData) return;
@@ -140,6 +181,16 @@ export const CollegeCutoffApp = () => {
       toast({
         title: "Reorder undone",
         description: "College order has been restored to previous state",
+      });
+    } else if (lastAction === 'restore') {
+      const { restoredCollege, previousColleges, previousDeleted } = lastActionData;
+      
+      setColleges(previousColleges);
+      setDeletedColleges(previousDeleted);
+      
+      toast({
+        title: "Restore undone",
+        description: `${restoredCollege.collegeName} has been moved back to deleted section`,
       });
     }
 
@@ -223,14 +274,15 @@ export const CollegeCutoffApp = () => {
               </Button>
             </div>
 
-            <CollegeTable
-              colleges={colleges}
-              deletedColleges={deletedColleges}
-              onReorder={handleReorder}
-              onDelete={handleDelete}
-              onUndo={handleUndo}
-              lastAction={lastAction}
-            />
+        <CollegeTable
+          colleges={colleges}
+          deletedColleges={deletedColleges}
+          onReorder={handleReorder}
+          onDelete={handleDelete}
+          onRestore={handleRestore}
+          onUndo={handleUndo}
+          lastAction={lastAction}
+        />
           </div>
         )}
 

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
-import { Trash2, Undo2, ArrowUpDown } from 'lucide-react';
+import { Trash2, Undo2, ArrowUpDown, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +12,9 @@ interface CollegeTableProps {
   deletedColleges: CollegeData[];
   onReorder: (reorderedColleges: CollegeData[]) => void;
   onDelete: (collegeId: string) => void;
+  onRestore: (collegeId: string) => void;
   onUndo: () => void;
-  lastAction: 'delete' | 'reorder' | null;
+  lastAction: 'delete' | 'reorder' | 'restore' | null;
 }
 
 export const CollegeTable = ({
@@ -21,6 +22,7 @@ export const CollegeTable = ({
   deletedColleges,
   onReorder,
   onDelete,
+  onRestore,
   onUndo,
   lastAction
 }: CollegeTableProps) => {
@@ -107,7 +109,7 @@ export const CollegeTable = ({
             className="gap-2"
           >
             <Undo2 className="w-4 h-4" />
-            Undo {lastAction === 'delete' ? 'Delete' : 'Reorder'}
+            Undo {lastAction === 'delete' ? 'Delete' : lastAction === 'restore' ? 'Restore' : 'Reorder'}
           </Button>
         )}
       </div>
@@ -246,9 +248,20 @@ export const CollegeTable = ({
                   <span className="text-muted-foreground ml-2">- {college.branch}</span>
                   <span className="text-muted-foreground ml-2">(Percentile: {college.numberInsideBracket})</span>
                 </div>
-                <Badge variant="outline" className="text-destructive border-destructive">
-                  Deleted
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onRestore(college.id)}
+                    className="gap-2 text-foreground hover:bg-muted"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Restore
+                  </Button>
+                  <Badge variant="outline" className="text-destructive border-destructive">
+                    Deleted
+                  </Badge>
+                </div>
               </div>
             ))}
           </div>
